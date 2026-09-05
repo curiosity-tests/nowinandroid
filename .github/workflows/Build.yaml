@@ -2,14 +2,39 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: instrumented
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
   push:
     branches:
       - main
   pull_request:
 
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}-${{ inputs.leg || 'push' }}-${{ inputs.racecar_run }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  # The one variable that separates the arms: on baseline, action-checkout
+  # skips its Set up Chalk step entirely.
+  CHALK_ON: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+
+run-name: "Build ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
 jobs:
   test_and_apk:
@@ -20,12 +45,23 @@ jobs:
       contents: write
       pull-requests: write
       security-events: write
+      id-token: write
 
     timeout-minutes: 60
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
@@ -194,6 +230,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     strategy:
+      fail-fast: false
       matrix:
         api-level: [26, 34]
 
@@ -217,7 +254,17 @@ jobs:
           ls /dev/kvm
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
