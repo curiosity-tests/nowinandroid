@@ -32,7 +32,7 @@ permissions:
 env:
   # The one variable that separates the arms: on baseline, action-checkout
   # skips its Set up Chalk step entirely.
-  CHALK_ON: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
 
 run-name: "Build ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
@@ -101,7 +101,7 @@ jobs:
         # Runs if previous job failed
       - name: Generate new Dependency Guard baselines if verification failed and it's a PR
         id: dependencyguard_baseline
-        if: steps.dependencyguard_verify.outcome == 'failure' && github.event_name == 'pull_request'
+        if: steps.dependencyguard_verify.outcome == 'failure' && 'push' == 'pull_request'
         run: |
           ./gradlew dependencyGuardBaseline
 
@@ -129,7 +129,7 @@ jobs:
           echo "::error::Check Graphs failed, please update graphs with: ./gradlew graphUpdate" && exit 1
 
       - name: Push new graphs if available
-        if: steps.graphs_verify.outcome == 'failure' && github.event_name == 'pull_request'
+        if: steps.graphs_verify.outcome == 'failure' && 'push' == 'pull_request'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: '**/README.md'
@@ -153,7 +153,7 @@ jobs:
       # Runs if previous job failed
       - name: Generate new screenshots if verification failed and it's a PR
         id: screenshotsrecord
-        if: steps.screenshotsverify.outcome == 'failure' && github.event_name == 'pull_request'
+        if: steps.screenshotsverify.outcome == 'failure' && 'push' == 'pull_request'
         run: |
           ./gradlew recordRoborazziDemoDebug
 
