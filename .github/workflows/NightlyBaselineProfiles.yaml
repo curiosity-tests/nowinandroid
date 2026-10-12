@@ -2,8 +2,6 @@ name: NightlyBaselineProfiles
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron:  '42 4 * * *'
 
 jobs:
   baseline_profiles:
